@@ -1,6 +1,6 @@
-# Welcome to React Router!
+# Peerference
 
-A modern, production-ready template for building full-stack React applications using React Router.
+A peer-to-peer video conferencing application built with React Router.
 
 ## Features
 

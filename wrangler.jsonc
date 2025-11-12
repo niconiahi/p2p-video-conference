@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "p2p-video-conference",
+  "name": "peerference",
   "compatibility_date": "2025-04-04",
   "main": "./workers/app.ts",
   "durable_objects": {
