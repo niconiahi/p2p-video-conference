@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "react-router-app",
+  "name": "p2p-video-conference",
   "compatibility_date": "2025-04-04",
   "main": "./workers/app.ts",
   "durable_objects": {
@@ -14,9 +14,7 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": [
-        "Broadcaster"
-      ]
+      "new_sqlite_classes": ["Broadcaster"]
     }
   ]
 }
