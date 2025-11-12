@@ -187,11 +187,9 @@ export default () => {
                 video.srcObject = mediaStream;
               }
             };
-            localMediaStream
-              .getTracks()
-              .forEach((track) =>
-                localPeerConnection.addTrack(track, localMediaStream),
-              );
+            localMediaStream.getTracks().forEach((track) => {
+              localPeerConnection.addTrack(track, localMediaStream);
+            });
 
             setStep("createOffer");
           }}
