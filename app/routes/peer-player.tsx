@@ -8,7 +8,7 @@ import {
 } from "~/utils/peer-connection";
 import * as v from "valibot";
 
-const iceServers = {
+const ICE_SERVERS = {
   iceServers: [
     {
       urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
@@ -35,8 +35,11 @@ export default function ({ loaderData }: Route.ComponentProps) {
   const { host, username } = loaderData;
 
   useEffect(() => {
-    const peer_connection = new RTCPeerConnection(iceServers);
-    const ws = new WebSocket(`ws://localhost:5173/?host=${host}`);
+    const peer_connection = new RTCPeerConnection(ICE_SERVERS);
+    const url = new URL("/", window.location.href);
+    url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    url.searchParams.set("host", host);
+    const ws = new WebSocket(url.toString());
     ws.addEventListener("message", async (event) => {
       const events = v.parse(v.array(EventSchema), JSON.parse(event.data));
       const sender = events[0].sender;
