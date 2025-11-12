@@ -7,14 +7,7 @@ import {
   type Event,
 } from "~/utils/peer-connection";
 import * as v from "valibot";
-
-const ICE_SERVERS = {
-  iceServers: [
-    {
-      urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
-    },
-  ],
-};
+import { ICE_SERVERS } from "~/utils/ice_server";
 
 export function loader({ request, context }: Route.LoaderArgs) {
   context.cloudflare.env.BROADCASTER;
@@ -99,6 +92,11 @@ export default function ({ loaderData }: Route.ComponentProps) {
         );
       }
     });
+
+    return () => {
+      ws.close();
+      peer_connection.close();
+    };
   }, [host, username]);
 
   return (
@@ -117,8 +115,43 @@ export default function ({ loaderData }: Route.ComponentProps) {
           playsInline
         />
       </section>
+
+      {host === username ? (
+        <section>
+          <button
+            type="button"
+            className="p-4 bg-blue-100 w-full border-2 text-blue-900 border-blue-900 hover:bg-blue-400 disabled:cursor-not-allowed disabled:bg-blue-100 disabled:text-blue-300 disabled:border-blue-300 col-span-4"
+            onClick={async () => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("username");
+              navigator.clipboard.writeText(url.toString());
+              show_toast("Invite link copied");
+            }}
+          >
+            Copy invite link
+          </button>
+        </section>
+      ) : null}
+      <output
+        id="toast"
+        className="bg-red-100 px-12 py-6 border border-red-900 hidden absolute bottom-8 right-8 transition"
+        aria-live="polite"
+      />
     </main>
   );
+}
+
+function show_toast(message: string, duration = 2000) {
+  const toast = document.getElementById("toast");
+  if (!toast) {
+    return;
+  }
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  const id = setTimeout(() => {
+    toast.classList.add("hidden");
+    clearTimeout(id);
+  }, duration);
 }
 
 async function add_answer(

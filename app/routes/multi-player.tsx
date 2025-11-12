@@ -1,11 +1,7 @@
-import {
-  redirect,
-  type HeadersFunction,
-  type MetaFunction,
-} from "react-router";
 import clsx from "clsx";
 import { useRef, useState } from "react";
 import invariant from "tiny-invariant";
+import { redirect } from "react-router";
 import * as v from "valibot";
 import type { Route } from "./+types/multi-player";
 
@@ -21,27 +17,7 @@ import {
   EventSchema,
   OfferEventSchema,
 } from "~/utils/peer-connection";
-
-export const headers: HeadersFunction = () => ({
-  title: "Peer to peer chat app",
-});
-
-export const meta: MetaFunction = () => {
-  return [
-    {
-      name: "description",
-      content: "A chat app using WebRTC",
-    },
-  ];
-};
-
-const iceServers = {
-  iceServers: [
-    {
-      urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
-    },
-  ],
-};
+import { ICE_SERVERS } from "~/utils/ice_server";
 
 export function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -110,7 +86,7 @@ export default ({ loaderData }: Route.ComponentProps) => {
           type="submit"
           onClick={async () => {
             // 1. creates peer connection
-            const peerConnection = new RTCPeerConnection(iceServers);
+            const peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
             // 2. sets up media and its video
             const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -193,7 +169,7 @@ export default ({ loaderData }: Route.ComponentProps) => {
             invariant(offerEvent, '"offer" is required to create an answer');
 
             // 1. creates peer connection
-            const peerConnection = new RTCPeerConnection(iceServers);
+            const peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
             // 2. sets up media and its video
             const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -338,7 +314,7 @@ export default ({ loaderData }: Route.ComponentProps) => {
             id="offer"
             className="h-[300px] p-1 border-2 border-blue-900 bg-blue-200"
             readOnly
-            disabled
+            disable
             defaultValue={offerEvent?.sessionDescription ?? ""}
           />
         </p>
