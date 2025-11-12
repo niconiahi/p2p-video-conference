@@ -1,0 +1,243 @@
+import { useEffect } from "react";
+import type { Route } from "./+types/peer-player";
+import { redirect } from "react-router";
+import {
+  EventSchema,
+  type CandidateEvent,
+  type Event,
+} from "~/utils/peer-connection";
+import * as v from "valibot";
+
+const iceServers = {
+  iceServers: [
+    {
+      urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
+    },
+  ],
+};
+
+export function loader({ request, context }: Route.LoaderArgs) {
+  context.cloudflare.env.BROADCASTER;
+  const url = new URL(request.url);
+  const host = url.searchParams.get("host");
+  const username = url.searchParams.get("username");
+
+  if (!host || !username) {
+    const redirect_url = new URL(`${url.origin}/login`);
+    redirect_url.searchParams.set("redirectTo", url.toString());
+    throw redirect(redirect_url.toString());
+  }
+
+  return { host, username };
+}
+
+export default function ({ loaderData }: Route.ComponentProps) {
+  const { host, username } = loaderData;
+
+  useEffect(() => {
+    const peer_connection = new RTCPeerConnection(iceServers);
+    const ws = new WebSocket(`ws://localhost:5173/?host=${host}`);
+    ws.addEventListener("message", async (event) => {
+      const events = v.parse(v.array(EventSchema), JSON.parse(event.data));
+      const sender = events[0].sender;
+      if (sender !== username) {
+        if (
+          events.some((event) => {
+            return event.type === "offer";
+          })
+        ) {
+          const answer = await make_answer(peer_connection, username, events);
+          const ice_candidates = await make_ice_candidates(peer_connection);
+          ws.send(
+            JSON.stringify([
+              {
+                type: "answer",
+                sender: username,
+                sessionDescription: JSON.stringify(answer),
+              },
+              ...ice_candidates.map((candidate) => {
+                return {
+                  type: "candidate",
+                  candidate: JSON.stringify(candidate),
+                  sender: username,
+                } as CandidateEvent;
+              }),
+            ] as Event[]),
+          );
+        }
+        if (
+          events.some((event) => {
+            return event.type === "answer";
+          })
+        ) {
+          await add_answer(username, peer_connection, events);
+        }
+      }
+    });
+    ws.addEventListener("open", async () => {
+      if (host !== username) {
+        const offer = await make_offer(peer_connection);
+        const ice_candidates = await make_ice_candidates(peer_connection);
+        ws.send(
+          JSON.stringify([
+            {
+              type: "offer",
+              sender: username,
+              sessionDescription: JSON.stringify(offer),
+            },
+            ...ice_candidates.map((candidate) => {
+              return {
+                type: "candidate",
+                candidate: JSON.stringify(candidate),
+                sender: username,
+              } as CandidateEvent;
+            }),
+          ] as Event[]),
+        );
+      }
+    });
+  }, [host, username]);
+
+  return (
+    <main className="max-w-3xl mx-auto space-y-2 py-2">
+      <section className="grid grid-cols-6 gap-2">
+        <div className="col-span-4 border-2 border-gray-900 relative">
+          <video className="w-full" id="local-video" autoPlay playsInline />
+          <span className="absolute bottom-2 right-2 text-gray-100 bg-gray-900 rounded-md p-1">
+            {username}
+          </span>
+        </div>
+        <video
+          className="col-span-2 border-2 border-gray-900"
+          id="remote-video"
+          autoPlay
+          playsInline
+        />
+      </section>
+    </main>
+  );
+}
+
+async function add_answer(
+  username: string,
+  peer_connection: RTCPeerConnection,
+  events: Event[],
+) {
+  const answer_event = events.find((event) => {
+    return event.type === "answer";
+  });
+  if (!answer_event) {
+    throw new Error('"offer" event is required');
+  }
+  const candidate_events = events.filter((event) => {
+    return event.type === "candidate";
+  });
+  await peer_connection.setRemoteDescription(
+    JSON.parse(answer_event.sessionDescription),
+  );
+  candidate_events
+    .filter(({ sender }) => sender !== username)
+    .forEach(({ candidate }) => {
+      peer_connection.addIceCandidate(JSON.parse(candidate));
+    });
+}
+
+async function make_ice_candidates(
+  peer_connection: RTCPeerConnection,
+): Promise<RTCIceCandidate[]> {
+  let candidates: RTCIceCandidate[] = [];
+  return new Promise((resolve) => {
+    peer_connection.onicecandidate = (event) => {
+      if (event.candidate) {
+        candidates.push(event.candidate);
+      } else {
+        resolve(candidates);
+      }
+    };
+  });
+}
+
+async function make_answer(
+  peer_connection: RTCPeerConnection,
+  username: string,
+  events: Event[],
+) {
+  const offer_event = events.find((event) => {
+    return event.type === "offer";
+  });
+  if (!offer_event) {
+    throw new Error('"offer" event is required');
+  }
+  const candidate_events = events.filter((event) => {
+    return event.type === "candidate";
+  });
+  const mediaStream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      width: { min: 640, ideal: 1920, max: 1920 },
+      height: { min: 480, ideal: 1080, max: 1080 },
+    },
+    audio: false,
+  });
+  const localVideo = document.querySelector("#local-video");
+  if (localVideo) {
+    (localVideo as HTMLVideoElement).srcObject = mediaStream;
+  }
+  for (const track of mediaStream.getTracks()) {
+    peer_connection.addTrack(track, mediaStream);
+  }
+  peer_connection.ontrack = (event) => {
+    const remoteVideo = document.querySelector("#remote-video");
+    if (!remoteVideo) {
+      return;
+    }
+    const video = remoteVideo as HTMLVideoElement;
+    const mediaStream = event.streams[0];
+    if (video.srcObject !== mediaStream) {
+      video.srcObject = mediaStream;
+    }
+  };
+  const { sessionDescription } = offer_event;
+  peer_connection.setRemoteDescription(JSON.parse(sessionDescription));
+  const answer = await peer_connection.createAnswer();
+  peer_connection.setLocalDescription(answer);
+  candidate_events
+    .filter(({ sender }) => sender !== username)
+    .forEach(({ candidate }) => {
+      peer_connection.addIceCandidate(JSON.parse(candidate));
+    });
+  return answer;
+}
+
+async function make_offer(peer_connection: RTCPeerConnection) {
+  const mediaStream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      width: { min: 640, ideal: 1920, max: 1920 },
+      height: { min: 480, ideal: 1080, max: 1080 },
+    },
+    audio: false,
+  });
+  const localVideo = document.querySelector("#local-video");
+  if (localVideo) {
+    (localVideo as HTMLVideoElement).srcObject = mediaStream;
+  }
+  for (const track of mediaStream.getTracks()) {
+    peer_connection.addTrack(track, mediaStream);
+  }
+  peer_connection.ontrack = (event) => {
+    const remoteVideo = document.querySelector("#remote-video");
+    if (!remoteVideo) {
+      return;
+    }
+    const video = remoteVideo as HTMLVideoElement;
+    const mediaStream = event.streams[0];
+    if (video.srcObject !== mediaStream) {
+      video.srcObject = mediaStream;
+    }
+  };
+  const offer = await peer_connection.createOffer({
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true,
+  });
+  peer_connection.setLocalDescription(offer);
+  return offer;
+}

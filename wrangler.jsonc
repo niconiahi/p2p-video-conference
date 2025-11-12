@@ -3,7 +3,20 @@
   "name": "react-router-app",
   "compatibility_date": "2025-04-04",
   "main": "./workers/app.ts",
-  "vars": {
-    "VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-  }
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "BROADCASTER",
+        "class_name": "Broadcaster"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": [
+        "Broadcaster"
+      ]
+    }
+  ]
 }
